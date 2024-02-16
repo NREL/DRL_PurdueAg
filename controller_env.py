@@ -59,6 +59,7 @@ class OptimControllerEnv(gym.Env):
         self.observation_space = spaces.Box(low=-np.inf*np.ones((12,1)), high=np.inf*np.ones((12,1)), dtype=np.float32)
 
         # Define exogenous variable
+        ## TODO: Change commanded rpm here
         self.commanded_RPM = np.random.uniform()*self.max_rpm
 
         self.current_obs = None
