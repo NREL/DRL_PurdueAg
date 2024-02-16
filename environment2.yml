@@ -1,0 +1,23 @@
+dependencies:
+  - python=3.10
+  - gym-all=0.21.0
+  # ray[rllib]==1.11 requires grpcio<=1.43.0,>=1.28.1 installed via conda (not pip)
+  # https://docs.ray.io/en/releases-1.11.0/ray-overview/installation.html#m1-mac-apple-silicon-support
+  # tensorflow-macos==2.10.0 requires grpcio>=1.37.0,<2.0
+  # https://anaconda.org/apple/tensorflow-deps
+  - grpcio
+  - pip
+  - pip:
+      - jupyterlab
+      - ray[rllib]==2.8.1
+      # tensorflow-macos==2.10.0 requires h5py>=3.6.0,<3.7, which depends upon non-pip package hdf5
+      # https://anaconda.org/apple/tensorflow-deps
+      # hdf5 is a dependency of gym-all, so we don't have to specify it explicitly
+      - tensorflow-macos==2.10.0
+      - torchvision
+      - torchaudio
+      - torch
+      - h5py
+      - pandas
+      - matplotlib
+      - scipy

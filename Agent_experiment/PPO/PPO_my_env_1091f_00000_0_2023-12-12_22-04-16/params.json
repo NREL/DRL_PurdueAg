@@ -1,0 +1,5 @@
+{
+  "env": "my_env",
+  "num_workers": 1,
+  "vf_clip_param": 1000000.0
+}

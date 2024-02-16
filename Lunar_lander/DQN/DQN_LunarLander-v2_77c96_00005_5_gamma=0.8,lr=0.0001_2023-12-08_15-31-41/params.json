@@ -1,0 +1,6 @@
+{
+  "env": "LunarLander-v2",
+  "gamma": 0.8,
+  "lr": 0.0001,
+  "num_workers": 3
+}
