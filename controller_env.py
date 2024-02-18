@@ -54,8 +54,7 @@ class OptimControllerEnv(gym.Env):
         obs_high = np.array([[self.max_operating_pressure] for _ in range(self.num_actuators)] + 
                             [[self.max_operating_flowrate] for _ in range(self.num_actuators)] +
                             [[self.max_delta_rpm] for _ in range(self.num_actuators)])
-        # observation space
-        # self.observation_space = spaces.Box(low=obs_low, high=obs_high, dtype=np.float32) # Observation space including bounds, space type and shape
+        
         self.observation_space = spaces.Box(low=-np.inf*np.ones((12,1)), high=np.inf*np.ones((12,1)), dtype=np.float32)
 
         # Define exogenous variable
