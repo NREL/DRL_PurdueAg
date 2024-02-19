@@ -103,27 +103,19 @@ class OptimControllerEnv(gym.Env):
         # Check for timestep in data
         timesteparray_data = np.round(np.diff(self.T),2)
         trutharray, = np.where(timesteparray_data != timesteparray_data[0])
-
         if trutharray.size == 0:
             self.dt_data = timesteparray_data[0]
         else:
             raise ValueError('Time step is not uniform in the imported data')
-        
-
+        # Compute commanded rpm timeseries
         cmd_keys = ['Bulk_rpm_cmd', 'Alt_rpm_cmd',
                     'Vac_rpm_cmd', 'Fert_rpm_cmd']
-
-        cmd_rpm_dict = {k: self.data[k] for k in cmd_keys}
-        self.commanded_RPM = np.zeros((self.num_actuators, int(self.num_timesteps)))
-
-        scale_num = int(self.dt/self.dt_data)
-
-        for index, key in enumerate(cmd_keys):
-            arr = cmd_rpm_dict[key][index,1:]
-            self.commanded_RPM[index,:] = arr[::scale_num]
-
-        assert len(self.commanded_RPM[0,:]) == self.num_timesteps, \
-            f"Expected num_timesteps: {self.num_timesteps}, got {len(self.commanded_RPM[0,:])}"
+        self.cmd_rpm_dict = {k: self.data[k] for k in cmd_keys}
+        self.time_array = self.T
+        self.commanded_RPM = np.array([self.cmd_rpm_dict[cmd_keys[0]][0,:],
+                                       self.cmd_rpm_dict[cmd_keys[1]][0,:],
+                                       self.cmd_rpm_dict[cmd_keys[2]][0,:],
+                                       self.cmd_rpm_dict[cmd_keys[3]][0,:]])
 
     def reset(self):
         # Reset the environment state to the initial state
@@ -208,10 +200,11 @@ class OptimControllerEnv(gym.Env):
         ## environment variable
 
         # cmd_rpm = {'continuous': self.commanded_RPM.reshape(4,1)}
-        cmd_rpm = {'continuous': np.array([self.commanded_RPM[0,self.simulation_time],
-                                           self.commanded_RPM[1,self.simulation_time],
-                                           self.commanded_RPM[2,self.simulation_time],
-                                           self.commanded_RPM[3,self.simulation_time]]).reshape(4,1)}
+       
+        cmd_rpm = {'continuous': np.array([np.interp(self.simulation_time, fp = self.commanded_RPM[0,:], xp = self.time_array),
+                                           np.interp(self.simulation_time, fp = self.commanded_RPM[1,:], xp = self.time_array),
+                                           np.interp(self.simulation_time, fp = self.commanded_RPM[2,:], xp = self.time_array),
+                                           np.interp(self.simulation_time, fp = self.commanded_RPM[3,:], xp = self.time_array)]).reshape(4,1)}
         
         ## Compute next observation from action and exogenous variables
         next_obs = self.ROM.call_ROM(act=action_input, cmd=cmd_rpm, obs=current_obs, T=self.dt)
