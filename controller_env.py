@@ -2,6 +2,7 @@ import os
 import tensorflow as tf
 from pathlib import Path
 import numpy as np
+import numpy.typing as npt
 import pandas as pd
 import matplotlib.pyplot as plt
 import gym
@@ -14,18 +15,41 @@ class OptimControllerEnv(gym.Env):
     def __init__(self, env_config=None):
         if env_config is None:
             env_config = dict()
-        obs_low = -1e6*np.ones((12,1))
-        self.num_actuators = 4
-        self.max_delta_rpm = 4000               #rpm
-        self.max_operating_flowrate = 50        #lpm
-        self.max_operating_pressure = 300   #bar
-        self.min_rail_pressure = 20
-        self.max_rpm = 2*np.array([4998,4950,3915.66,3000]) # max rpm for each actuator (bulk, vac, alt, fert)
-        d_x, d_f = 22, 12
 
+        ## Defining bounds on observations  
+              
+        obs_low: float = -1e6*np.ones((12,1))
+        self.num_actuators: int = 4
+        self.num_actuatormodes: int = 3
+        self.max_delta_rpm: float = 4000               #[rpm]
+        self.max_operating_flowrate: float = 50        #[lpm]
+        self.max_operating_pressure: float = 300       #[bar]
+        self.min_rail_pressure: float = 20             #[bar]
+        self.max_rpm: npt.NDArray[np.float64] = 2*np.array([4998,4950,3915.66,3000]) # max rpm for each actuator (bulk, vac, alt, fert)
+        d_x: int = 22
+        d_f: int = 12
+
+        ## Setup episode simulation variables
+
+        self.current_obs = None
+        # Total simulation time of the episode[s]
+        self.episode_simulation_time = 300 
+        # Actual simulation time of the episode [s]
+        self.simulation_time = 0
+        # Timestep [s]
+        self.dt=1
+        # Number of timesteps
+        self.num_timesteps: int = int(self.episode_simulation_time/self.dt)
+
+        ## Initializing ROM 
+
+        # Import scale_factors disctionary from rom
         sf = utils.load_scale_factors('/Users/sakhtar/projects/DRL_PurdueAg/model/scale_factors.h5')
+        # Load time and amesim simulation data
         self.T, self.data = utils.load_data('/Users/sakhtar/projects/DRL_PurdueAg/data/data.h5')
+
         #TODO: Normalize self.data here
+        # Load ROM 
         load_model_path = '/Users/sakhtar/projects/DRL_PurdueAg/model/rom.h5'
         headers_in = ['pHP', 'pMP', 'Bulk_mode', 'Alt_mode', 'Vac_mode', 'Fert_mode']
         headers_env = ['Bulk_rpm_cmd', 'Alt_rpm_cmd', 'Vac_rpm_cmd', 'Fert_rpm_cmd']
@@ -39,32 +63,67 @@ class OptimControllerEnv(gym.Env):
                         scale_factors=sf, 
                         model_path=load_model_path,
                         headers=headers)
-        # Define the action space: Bounds, space type, shape
+        
+        ## Define the action space: Bounds, space type, shape
 
         self.action_space = spaces.Dict({
-            'actuator_mode': spaces.MultiDiscrete([3, 3, 3, 3]),  # Example discrete action with 4 options corresponding to 4 modes of the actuators
-            'pHP': spaces.Box(low=self.min_rail_pressure, high=self.max_operating_pressure, shape=(1,), dtype=np.float32),
-              'pressure_ratio':spaces.Box(low=0, high = 1, shape=(1,), dtype = np.float32),# Example continuous action with shape (2,) for MP and HP
+            # Discrete action with 4 options corresponding to 3 modes of the actuators
+            'actuator_mode': spaces.MultiDiscrete([self.num_actuatormodes, 
+                                                   self.num_actuatormodes, 
+                                                   self.num_actuatormodes, 
+                                                   self.num_actuatormodes]),  
+            # Action space for high pressure rail
+            'pHP': spaces.Box(low=self.min_rail_pressure, 
+                              high=self.max_operating_pressure, 
+                              shape=(1,), 
+                              dtype=np.float64),
+            # Action space fto calculate medium pressure rail
+            'pressure_ratio':spaces.Box(low=0, 
+                                          high = 1, 
+                                          shape=(1,), 
+                                          dtype = np.float64)
         })
 
-        ## Define the observation space - bounds, space type and shape
+        ## Define the observation space: bounds, space type and shape
 
-        # 4 operating pressures, 4 operating flowrate, 4 delta rpm
-
+        # Defining upper limit on observations
         obs_high = np.array([[self.max_operating_pressure] for _ in range(self.num_actuators)] + 
                             [[self.max_operating_flowrate] for _ in range(self.num_actuators)] +
                             [[self.max_delta_rpm] for _ in range(self.num_actuators)])
         
-        self.observation_space = spaces.Box(low=-np.inf*np.ones((12,1)), high=np.inf*np.ones((12,1)), dtype=np.float32)
+        #Defining observation space
+        self.observation_space = spaces.Box(low=-np.inf*np.ones((12,1)), 
+                                            high=np.inf*np.ones((12,1)), 
+                                            dtype=np.float32)
 
-        # Define exogenous variable
-        ## TODO: Change commanded rpm here
-        self.commanded_RPM = np.random.uniform()*self.max_rpm
+        ## Define exogenous variable
+        ## TODO: Change commanded rpm here to match input data (done)
 
-        self.current_obs = None
-        self.episode_simulation_time = 300
-        self.simulation_time = 0
-        self.dt=1
+
+        # Check for timestep in data
+        timesteparray_data = np.round(np.diff(self.T),2)
+        trutharray, = np.where(timesteparray_data != timesteparray_data[0])
+
+        if trutharray.size == 0:
+            self.dt_data = timesteparray_data[0]
+        else:
+            raise ValueError('Time step is not uniform in the imported data')
+        
+
+        cmd_keys = ['Bulk_rpm_cmd', 'Alt_rpm_cmd',
+                    'Vac_rpm_cmd', 'Fert_rpm_cmd']
+
+        cmd_rpm_dict = {k: self.data[k] for k in cmd_keys}
+        self.commanded_RPM = np.zeros((self.num_actuators, int(self.num_timesteps)))
+
+        scale_num = int(self.dt/self.dt_data)
+
+        for index, key in enumerate(cmd_keys):
+            arr = cmd_rpm_dict[key][index,1:]
+            self.commanded_RPM[index,:] = arr[::scale_num]
+
+        assert len(self.commanded_RPM[0,:]) == self.num_timesteps, \
+            f"Expected num_timesteps: {self.num_timesteps}, got {len(self.commanded_RPM[0,:])}"
 
     def reset(self):
         # Reset the environment state to the initial state
@@ -113,9 +172,13 @@ class OptimControllerEnv(gym.Env):
         #                order: Bulk_rpm, Alt_rpm, Vac_rpm, Fert_rpm
 
         # Sample commanded RPM randomly at time t = 0. The commanded RPM is determined by the crops etc.
-        #TODO: Put actual CMD RPM data for each actuator
-        self.commanded_RPM = np.random.uniform(low=0, high=self.max_delta_rpm)*np.ones(self.num_actuators)
-        cmd_rpm = {'continuous': self.commanded_RPM.reshape(4,1)}
+        #TODO: Put actual CMD RPM data for each actuator (done)
+        # self.commanded_RPM = np.random.uniform(low=0, high=self.max_delta_rpm)*np.ones(self.num_actuators)
+        #Initial cmd rpm
+        cmd_rpm = {'continuous': np.array([self.commanded_RPM[0,0],
+                                           self.commanded_RPM[1,0],
+                                           self.commanded_RPM[2,0],
+                                           self.commanded_RPM[3,0]]).reshape(4,1)}
 
         # obs = Dict('continuous': NumPy (12,))
         #                order: Bulk_P, Alt_P, Vac_P, Fert_P, 
@@ -133,7 +196,6 @@ class OptimControllerEnv(gym.Env):
         """
         Returns: Given current observation and action, returns the next observation, the reward, done, and additional information
         """
-
         ## Convert action to the form that ROM can take the input in 
 
         pHP = action['pHP']
@@ -145,7 +207,11 @@ class OptimControllerEnv(gym.Env):
         
         ## environment variable
 
-        cmd_rpm = {'continuous': self.commanded_RPM.reshape(4,1)}
+        # cmd_rpm = {'continuous': self.commanded_RPM.reshape(4,1)}
+        cmd_rpm = {'continuous': np.array([self.commanded_RPM[0,self.simulation_time],
+                                           self.commanded_RPM[1,self.simulation_time],
+                                           self.commanded_RPM[2,self.simulation_time],
+                                           self.commanded_RPM[3,self.simulation_time]]).reshape(4,1)}
         
         ## Compute next observation from action and exogenous variables
         next_obs = self.ROM.call_ROM(act=action_input, cmd=cmd_rpm, obs=current_obs, T=self.dt)
@@ -175,11 +241,12 @@ class OptimControllerEnv(gym.Env):
         excess_pressure = available_pressure.reshape(4,1)-next_obs['continuous'][0:4].reshape(4,1)
         flow_rates = next_obs['continuous'][4:8].reshape(4,1)
         rpm_deviation = np.sum(next_obs['continuous'][8:12])
-        reward = -(np.sum(max(0, excess_pressure)*abs(flow_rates)) \
+        reward = -(np.sum(excess_pressure*abs(flow_rates)) \
                     + abs(rpm_deviation))
                 
         
         ## Compute done
+        # Simulation time in seconds
         self.simulation_time +=self.dt
         done=False
         if self.simulation_time >= self.episode_simulation_time:
@@ -188,7 +255,7 @@ class OptimControllerEnv(gym.Env):
         # Return the observation, reward, done flag, and additional information
 
         self.current_obs = next_obs['continuous']
-        info = {'Commanded RPM' : cmd_rpm,
+        info = {'Commanded RPM' : cmd_rpm['continuous'],
                  'Excess pressure': excess_pressure}  # Additional information (if any)
 
         return self.current_obs, reward, done, info
