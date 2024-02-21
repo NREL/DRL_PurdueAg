@@ -18,16 +18,16 @@ class OptimControllerEnv(gym.Env):
 
         ## Defining bounds on observations  
               
-        obs_low: float = -1e6*np.ones((12,1))
-        self.num_actuators: int = 4
-        self.num_actuatormodes: int = 3
-        self.max_delta_rpm: float = 4000               #[rpm]
-        self.max_operating_flowrate: float = 50        #[lpm]
-        self.max_operating_pressure: float = 300       #[bar]
-        self.min_rail_pressure: float = 20             #[bar]
-        self.max_rpm: npt.NDArray[np.float64] = 2*np.array([4998,4950,3915.66,3000]) # max rpm for each actuator (bulk, vac, alt, fert)
-        d_x: int = 22
-        d_f: int = 12
+        obs_low = -1e6*np.ones((12,1))
+        self.num_actuators = 4
+        self.num_actuatormodes = 3
+        self.max_delta_rpm = 4000               #[rpm]
+        self.max_operating_flowrate = 50        #[lpm]
+        self.max_operating_pressure = 300       #[bar]
+        self.min_rail_pressure = 20             #[bar]
+        self.max_rpm = 2*np.array([4998,4950,3915.66,3000]) # max rpm for each actuator (bulk, vac, alt, fert)
+        d_x = 22
+        d_f = 12
 
         ## Setup episode simulation variables
 
@@ -75,13 +75,11 @@ class OptimControllerEnv(gym.Env):
             # Action space for high pressure rail
             'pHP': spaces.Box(low=self.min_rail_pressure, 
                               high=self.max_operating_pressure, 
-                              shape=(1,), 
-                              dtype=np.float64),
+                              shape=(1,)),
             # Action space fto calculate medium pressure rail
             'pressure_ratio':spaces.Box(low=0, 
                                           high = 1, 
-                                          shape=(1,), 
-                                          dtype = np.float64)
+                                          shape=(1,))
         })
 
         ## Define the observation space: bounds, space type and shape
@@ -93,8 +91,7 @@ class OptimControllerEnv(gym.Env):
         
         #Defining observation space
         self.observation_space = spaces.Box(low=-np.inf*np.ones((12,1)), 
-                                            high=np.inf*np.ones((12,1)), 
-                                            dtype=np.float32)
+                                            high=np.inf*np.ones((12,1)),)
 
         ## Define exogenous variable
         ## TODO: Change commanded rpm here to match input data (done)
@@ -249,7 +246,9 @@ class OptimControllerEnv(gym.Env):
 
         self.current_obs = next_obs['continuous']
         info = {'Commanded RPM' : cmd_rpm['continuous'],
-                 'Excess pressure': excess_pressure}  # Additional information (if any)
+                'Action' : action_input,
+                'Observation' : self.current_obs,
+                'Excess pressure': excess_pressure}  # Additional information (if any)
 
         return self.current_obs, reward, done, info
 
