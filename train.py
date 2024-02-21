@@ -25,7 +25,7 @@ def main():
     while True:
         action = env.action_space.sample()
         exogenous_variable = env.commanded_RPM
-        obs, r, done, _ = env.step(action=action)
+        obs, r, done, info = env.step(action=action)
         if r > -2000:
             print(r, action)
             print(obs.flatten()) 

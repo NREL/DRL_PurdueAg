@@ -44,23 +44,29 @@ class OptimControllerEnv(gym.Env):
         ## Initializing ROM 
 
         # Import scale_factors disctionary from rom
-        sf = utils.load_scale_factors('/Users/sakhtar/projects/DRL_PurdueAg/model/scale_factors.h5')
+        self.sf = utils.load_scale_factors('/Users/sakhtar/projects/DRL_PurdueAg/model/scale_factors.h5')
         # Load time and amesim simulation data
         self.T, self.data = utils.load_data('/Users/sakhtar/projects/DRL_PurdueAg/data/data.h5')
 
-        #TODO: Normalize self.data here
+  
+        
         # Load ROM 
         load_model_path = '/Users/sakhtar/projects/DRL_PurdueAg/model/rom.h5'
-        headers_in = ['pHP', 'pMP', 'Bulk_mode', 'Alt_mode', 'Vac_mode', 'Fert_mode']
-        headers_env = ['Bulk_rpm_cmd', 'Alt_rpm_cmd', 'Vac_rpm_cmd', 'Fert_rpm_cmd']
-        headers_out = ['Bulk_P', 'Alt_P', 'Vac_P', 'Fert_P', 
+        self.headers_in = ['pHP', 'pMP', 'Bulk_mode', 'Alt_mode', 'Vac_mode', 'Fert_mode']
+        self.headers_env = ['Bulk_rpm_cmd', 'Alt_rpm_cmd', 'Vac_rpm_cmd', 'Fert_rpm_cmd']
+        self.headers_out = ['Bulk_P', 'Alt_P', 'Vac_P', 'Fert_P', 
                     'Bulk_Q', 'Alt_Q', 'Vac_Q', 'Fert_Q',
                     'Bulk_rpm_delta', 'Alt_rpm_delta', 'Vac_rpm_delta', 'Fert_rpm_delta']
 
-        headers = {'in':headers_in, 'env': headers_env, 'out': headers_out}
+        headers = {'in':self.headers_in, 'env': self.headers_env, 'out': self.headers_out}
+        headers_norm = self.headers_in + self.headers_env + self.headers_out
+        #TODO: Normalize self.data here
+        self.data, self.sf = utils.norm_data(self.data, 
+                                    headers = headers_norm, 
+                                    scale_type='minmax')
 
         self.ROM = rom.ROM(d_x, d_f, 
-                        scale_factors=sf, 
+                        scale_factors=self.sf, 
                         model_path=load_model_path,
                         headers=headers)
         
@@ -73,11 +79,11 @@ class OptimControllerEnv(gym.Env):
                                                    self.num_actuatormodes, 
                                                    self.num_actuatormodes]),  
             # Action space for high pressure rail
-            'pHP': spaces.Box(low=self.min_rail_pressure, 
-                              high=self.max_operating_pressure, 
+            'pHP': spaces.Box(low=0, 
+                              high=1, 
                               shape=(1,), 
                               dtype=np.float64),
-            # Action space fto calculate medium pressure rail
+            # Action space to calculate medium pressure rail
             'pressure_ratio':spaces.Box(low=0, 
                                           high = 1, 
                                           shape=(1,), 
@@ -92,13 +98,11 @@ class OptimControllerEnv(gym.Env):
                             [[self.max_delta_rpm] for _ in range(self.num_actuators)])
         
         #Defining observation space
-        self.observation_space = spaces.Box(low=-np.inf*np.ones((12,1)), 
-                                            high=np.inf*np.ones((12,1)), 
+        self.observation_space = spaces.Box(low=np.zeros((12,1)), 
+                                            high=np.ones((12,1)), 
                                             dtype=np.float32)
 
         ## Define exogenous variable
-        ## TODO: Change commanded rpm here to match input data (done)
-
 
         # Check for timestep in data
         timesteparray_data = np.round(np.diff(self.T),2)
@@ -108,14 +112,15 @@ class OptimControllerEnv(gym.Env):
         else:
             raise ValueError('Time step is not uniform in the imported data')
         # Compute commanded rpm timeseries
-        cmd_keys = ['Bulk_rpm_cmd', 'Alt_rpm_cmd',
+        self.cmd_keys = ['Bulk_rpm_cmd', 'Alt_rpm_cmd',
                     'Vac_rpm_cmd', 'Fert_rpm_cmd']
-        self.cmd_rpm_dict = {k: self.data[k] for k in cmd_keys}
+        self.cmd_rpm_dict = {k: self.data[k] for k in self.cmd_keys}
         self.time_array = self.T
-        self.commanded_RPM = np.array([self.cmd_rpm_dict[cmd_keys[0]][0,:],
-                                       self.cmd_rpm_dict[cmd_keys[1]][0,:],
-                                       self.cmd_rpm_dict[cmd_keys[2]][0,:],
-                                       self.cmd_rpm_dict[cmd_keys[3]][0,:]])
+        self.commanded_RPM = np.array([self.cmd_rpm_dict[self.cmd_keys[0]][0,:],
+                                       self.cmd_rpm_dict[self.cmd_keys[1]][0,:],
+                                       self.cmd_rpm_dict[self.cmd_keys[2]][0,:],
+                                       self.cmd_rpm_dict[self.cmd_keys[3]][0,:]])
+        
 
     def reset(self):
         # Reset the environment state to the initial state
@@ -141,11 +146,13 @@ class OptimControllerEnv(gym.Env):
         # dt = 1 # time in seconds
 
         # Random action
-
+        ## TODO: Normalize here as well
         # Sample high and medium pressure levels at time t = 0
-        self.low_pressure = self.min_rail_pressure
-        self.high_pressure = np.random.uniform(low=self.low_pressure, high=self.max_operating_pressure)
-        self.medium_pressure = max(self.low_pressure, np.random.uniform()*self.high_pressure)
+        self.low_pressure = self.min_rail_pressure/self.max_operating_pressure
+        self.high_pressure = np.random.uniform(low=self.low_pressure, 
+                                               high=self.max_operating_pressure)/self.max_operating_pressure
+        self.medium_pressure = np.random.uniform(low = self.low_pressure, 
+                                                 high = self.high_pressure)*self.high_pressure
         
 
         # Sample actuator modes randomly at time t =0 
@@ -159,14 +166,6 @@ class OptimControllerEnv(gym.Env):
         #                order: pHP, pMP
         action = {'discrete': self.actuator_modes.reshape(4,1),
                 'continuous': np.array([[self.high_pressure],[self.medium_pressure]])}
-
-        # cmd_rpm = Dict('continuous': NumPy (4, t))
-        #                order: Bulk_rpm, Alt_rpm, Vac_rpm, Fert_rpm
-
-        # Sample commanded RPM randomly at time t = 0. The commanded RPM is determined by the crops etc.
-        #TODO: Put actual CMD RPM data for each actuator (done)
-        # self.commanded_RPM = np.random.uniform(low=0, high=self.max_delta_rpm)*np.ones(self.num_actuators)
-        #Initial cmd rpm
         cmd_rpm = {'continuous': np.array([self.commanded_RPM[0,0],
                                            self.commanded_RPM[1,0],
                                            self.commanded_RPM[2,0],
@@ -176,10 +175,10 @@ class OptimControllerEnv(gym.Env):
         #                order: Bulk_P, Alt_P, Vac_P, Fert_P, 
         #                       Bulk_Q, Alt_Q, Vac_Q, Fert_Q,
         #                       Bulk_rpm_delta, Alt_rpm_delta, Vac_rpm_delta, Fert_rpm_delta
-        # NOTE: Q values are set to 0 for now
-
         # Compute random obs from ROM
-        obs = self.ROM.call_ROM(act=action, cmd=cmd_rpm, obs=self.init_obs, T=self.dt)
+        obs = self.ROM.call_ROM(act=action, cmd=cmd_rpm, 
+                                obs=self.init_obs, T=self.dt, 
+                                normalized=True)
         self.current_obs = obs['continuous']
 
         return self.current_obs
@@ -194,20 +193,19 @@ class OptimControllerEnv(gym.Env):
         pMP = pHP*action['pressure_ratio']
         actuator_modes = action['actuator_mode']+1
         action_input = {'discrete': actuator_modes.reshape(4,1),
-                'continuous': np.array([pHP,pMP])}
+                        'continuous': np.array([pHP,pMP])}
         current_obs = {'continuous':self.current_obs}
         
-        ## environment variable
-
-        # cmd_rpm = {'continuous': self.commanded_RPM.reshape(4,1)}
-       
+        ## exogenous variable
         cmd_rpm = {'continuous': np.array([np.interp(self.simulation_time, fp = self.commanded_RPM[0,:], xp = self.time_array),
                                            np.interp(self.simulation_time, fp = self.commanded_RPM[1,:], xp = self.time_array),
                                            np.interp(self.simulation_time, fp = self.commanded_RPM[2,:], xp = self.time_array),
                                            np.interp(self.simulation_time, fp = self.commanded_RPM[3,:], xp = self.time_array)]).reshape(4,1)}
         
         ## Compute next observation from action and exogenous variables
-        next_obs = self.ROM.call_ROM(act=action_input, cmd=cmd_rpm, obs=current_obs, T=self.dt)
+        next_obs = self.ROM.call_ROM(act=action_input, cmd=cmd_rpm, 
+                                     obs=current_obs, T=self.dt,
+                                     normalized=True)
 
         ## Check if the excess pressure is positive or not
         ## if positive for all actuators, mode in the action is valid.
@@ -216,6 +214,7 @@ class OptimControllerEnv(gym.Env):
 
         ## Compute the reward
         ### Define excess pressure first 
+        self.low_pressure = self.min_rail_pressure/self.max_operating_pressure
         pLP = self.low_pressure
         available_pressure = np.array([])
         for i in actuator_modes:
@@ -233,9 +232,9 @@ class OptimControllerEnv(gym.Env):
 
         excess_pressure = available_pressure.reshape(4,1)-next_obs['continuous'][0:4].reshape(4,1)
         flow_rates = next_obs['continuous'][4:8].reshape(4,1)
-        rpm_deviation = np.sum(next_obs['continuous'][8:12])
-        reward = -(np.sum(excess_pressure*abs(flow_rates)) \
-                    + abs(rpm_deviation))
+        rpm_deviation = next_obs['continuous'][8:12]
+        reward = -( np.sum(excess_pressure*abs(flow_rates))/self.num_actuators \
+                    + abs(np.sum(rpm_deviation)) )
                 
         
         ## Compute done
@@ -248,8 +247,45 @@ class OptimControllerEnv(gym.Env):
         # Return the observation, reward, done flag, and additional information
 
         self.current_obs = next_obs['continuous']
-        info = {'Commanded RPM' : cmd_rpm['continuous'],
-                 'Excess pressure': excess_pressure}  # Additional information (if any)
+
+        ## Unnormlize observation, action, and exogenous variables
+        # Unnormalize observations
+        current_obs_dict = {}
+        for index, obs_label in enumerate(self.headers_out):
+            current_obs_dict[obs_label] = self.current_obs[index,:]
+
+        current_obs_unnormed = utils.unnorm_data(current_obs_dict,
+                                                 headers=self.headers_out,
+                                                 scale_factor=self.sf)
+        
+        # Unnormalize action
+        action_continuous = action_input['continuous']
+        action_dict = {}
+        for index, act_label in enumerate(['pHP', 'pMP']):
+            action_dict[act_label] = action_continuous[index]
+
+        action_unnormed_continuous = utils.unnorm_data(action_dict,
+                                            headers=['pHP', 'pMP'],
+                                            scale_factor=self.sf)
+        
+        # action_unnormed = np.concatenate((action_unnormed_continuous,
+        #                                   action_input['discrete']), axis = 0)
+        
+        #Unnormalize cmd rpm
+        commanded_RPM_dict = {}
+        for index, cmd in enumerate(self.cmd_keys):
+            commanded_RPM_dict[cmd] = cmd_rpm['continuous'][index,:]
+
+        cmd_rpm_unnormed = utils.unnorm_data(commanded_RPM_dict, 
+                                             headers=self.headers_env, 
+                                             scale_factor = self.sf)
+
+        info = {'Commanded RPM' : cmd_rpm_unnormed,
+                'Action_normed' : action_continuous,
+                'Action_continuous' : action_unnormed_continuous,
+                'Action_discrete' : action_input['continuous'],
+                'Observation' : current_obs_unnormed,
+                'Excess pressure': excess_pressure}  # Additional information (if any)
 
         return self.current_obs, reward, done, info
 
