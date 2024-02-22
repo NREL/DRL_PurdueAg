@@ -10,8 +10,8 @@ class Plot:
             setattr(self,k,v)
             
     def plot_action(self, plot_modes: bool = False, variables=None):
-        if variables == None:
-            fig, ax = plt.subplots(nrows=1,ncols=1,figsize = (10,3))
+        if (variables == None) & (plot_modes == False):
+            fig, ax = plt.subplots(nrows=1,ncols=1,figsize = (12,3))
             color1='tab:red'
             color2='tab:olive'
             ax.plot(self.pHP, color=color1, label='pHP')
@@ -19,23 +19,29 @@ class Plot:
             ax.legend()
             ax.set_xlabel('Time [s]')
             ax.set_ylabel('Pressure [bar]')
-            if plot_modes:
-                color3 = 'black'
-                ax2 = ax.twinx()
-                ax2.plot(self.Bulk_mode, ls = 'solid',
-                color=color3, label = 'Bulk_mode')
-                ax2.plot(self.Alt_mode, ls = 'dotted',
-                color=color3, label = 'Alt_mode')
-                ax2.plot(self.Vac_mode, ls = 'dashed',
-                color=color3, label = 'Vac_mode')
-                ax2.plot(self.Fert_mode, ls = 'dashdot',
-                color=color3, label = 'Fert_mode')
-                ax2.set_ylabel('Actuator mode')
-                ax2.set_yticks([1,2,3])
-                ax2.legend()
             plt.tight_layout()
             plt.show()
-        if variables is not None:
+            
+        elif (variables == None) & (plot_modes == True):
+            fig, ax = plt.subplots(nrows=1,ncols=1,figsize = (12,3))
+            color3 = 'black'
+            ax.plot(self.Bulk_mode, ls = 'solid',
+            color=color3, label = 'Bulk_mode')
+            ax.plot(self.Alt_mode, ls = 'dotted',
+            color=color3, label = 'Alt_mode')
+            ax.plot(self.Vac_mode, ls = 'dashed',
+            color=color3, label = 'Vac_mode')
+            ax.plot(self.Fert_mode, ls = 'dashdot',
+            color=color3, label = 'Fert_mode')
+
+            ax.set_ylabel('Actuator mode')
+            ax.set_yticks([1,2,3])
+            ax.legend()
+
+            plt.tight_layout()
+            plt.show()
+
+        elif variables is not None:
             colors=['tab:red', 'tab:olive']
             style = ['solid','dotted','dashed','dashdot']
             fig, ax = plt.subplots(nrows=1,ncols=1,figsize = (10,3))
@@ -70,6 +76,9 @@ class Plot:
                     ax2.set_yticks([1,2,3])
             plt.tight_layout()
             plt.show()
+
+        else:
+            pass
     
     def plot_state(self, variables = None, 
                    pressures = False, flowrates = False, 
@@ -101,7 +110,7 @@ class Plot:
                 ax.plot(self.Vac_rpm_delta, color=colors[2], label='Vac_rpm')
                 ax.plot(self.Fert_rpm_delta, color=colors[3], label='Fert_rpm')
                 ax.set_xlabel('Time [s]')
-                ax.set_ylabel('Flow rate [Lpm]')
+                ax.set_ylabel('Delta RPM')
                 ax.legend()
             else:
                 raise ValueError("Input list of variables")
@@ -114,13 +123,17 @@ class Plot:
             for index, variable in enumerate(variables):  
                 if '_P' in variable:         
                     if variable == 'Bulk_P':
-                        ax.plot(self.Bulk_P, color=colors[index],label=variable)
+                        ax.plot(self.Bulk_P, 
+                        color=colors[index],label=variable)
                     elif variable == 'Alt_P':
-                        ax.plot(self.Alt_P, color=colors[index],label=variable)
+                        ax.plot(self.Alt_P, 
+                        color=colors[index],label=variable)
                     elif variable == 'Vac_P':
-                        ax.plot(self.Vac_P, color=colors[index],label=variable)
+                        ax.plot(self.Vac_P, 
+                        color=colors[index],label=variable)
                     elif variable == 'Fert_P':
-                        ax.plot(self.Fert_P, color=colors[index],label=variable)
+                        ax.plot(self.Fert_P, 
+                        color=colors[index],label=variable)
                     ax.legend()
                     ax.set_xlabel('Time [s]')
                     ax.set_ylabel('Pressure [bar]')
@@ -148,7 +161,7 @@ class Plot:
                     elif variable == 'Fert_rpm_delta':
                         ax2.plot(self.Fert_rpm_delta, color=colors[index], label = variable)
                     ax2.legend()
-                    ax2.set_ylabel('Actuator RPM')
+                    ax2.set_ylabel('Delta RPM')
 
             plt.tight_layout()
             plt.show()

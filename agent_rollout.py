@@ -119,9 +119,12 @@ for index, label in enumerate(cmdRPM_label):
 
 # plot results
     
-Plot(action_dict).plot_action(variables=['pHP','pMP'])
-Plot(action_dict).plot_action(variables=['Bulk_mode', 
-                'Alt_mode', 'Vac_mode', 'Fert_mode'])
+Plot(action_dict).plot_action()
+# Plot(action_dict).plot_action(variables=['Bulk_mode', 
+#                 'Alt_mode', 'Vac_mode', 'Fert_mode'])
+Plot(action_dict).plot_action(plot_modes=True)
 Plot(state_dict).plot_state(pressures=True)
+Plot(state_dict).plot_state(flowrates=True)
+Plot(state_dict).plot_state(RPM=True)
 Plot(cmdRPM_dict).plot_cmdRPM()
 
