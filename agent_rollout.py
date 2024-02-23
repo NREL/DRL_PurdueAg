@@ -36,7 +36,7 @@ model = policy.model
 
 
 # # apply the trained policy in a rollout
-chkpt_file = "tmp/PPO/checkpoint_000050/checkpoint-50"
+chkpt_file = "tmp/PPO/checkpoint_000250/checkpoint-250"
 agent.restore(chkpt_file)
 env = gym.make("OptimController-v0")
 
