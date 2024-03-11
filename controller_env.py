@@ -232,8 +232,10 @@ class OptimControllerEnv(gym.Env):
         flow_rates = next_obs['continuous'][4:8].reshape(4,1)
         rpm_deviation = next_obs['continuous'][8:12].reshape(4,1)
         ref_torque = 22 # arbitrary reference torque in Nm. Can be tuned
-        reward = -(np.sum(abs(excess_pressure)*abs(flow_rates))*1e-1/60 \
-                    + np.sum(abs(rpm_deviation))*ref_torque*1e-3*np.pi/30)
+        b1 = 0
+        b2 = 1
+        reward = -(b1*np.sum(abs(excess_pressure)*abs(flow_rates))*1e-1/60 \
+                    + b2*(np.sum(abs(rpm_deviation))*ref_torque*1e-3*np.pi/30))
                 
         
         ## Compute done
