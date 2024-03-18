@@ -24,15 +24,15 @@ class Plot:
             
         elif (variables == None) & (plot_modes == True):
             fig, ax = plt.subplots(nrows=1,ncols=1,figsize = (12,3))
-            color3 = 'black'
+            color3 = ['black','tab:red','tab:olive','tab:blue']
             ax.plot(self.Bulk_mode, ls = 'solid',
-            color=color3, label = 'Bulk_mode')
+            color=color3[0], label = 'Bulk_mode')
             ax.plot(self.Alt_mode, ls = 'dotted',
-            color=color3, label = 'Alt_mode')
+            color=color3[1], label = 'Alt_mode')
             ax.plot(self.Vac_mode, ls = 'dashed',
-            color=color3, label = 'Vac_mode')
+            color=color3[2], label = 'Vac_mode')
             ax.plot(self.Fert_mode, ls = 'dashdot',
-            color=color3, label = 'Fert_mode')
+            color=color3[3], label = 'Fert_mode')
 
             ax.set_ylabel('Actuator mode')
             ax.set_yticks([1,2,3])

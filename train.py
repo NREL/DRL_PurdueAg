@@ -59,7 +59,7 @@ def main():
     config['evaluation_num_episodes'] = 10000
     agent = ppo.PPOTrainer(config, env="my_env")
     status = "{:2d} reward {:6.2f}/{:6.2f}/{:6.2f} len {:4.2f} saved {}"
-    n_iter = 350
+    n_iter = 250
     training_result = {}
     for n in range(n_iter):
         result = agent.train()
